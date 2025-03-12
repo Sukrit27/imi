@@ -115,6 +115,7 @@ export function registerRoutes(app: Express): Server {
 
       // Create a new chat session with search capability
       const chat = model.startChat({
+        
         tools: [
           {
             // @ts-ignore - google_search is a valid tool but not typed in the SDK yet

@@ -7,15 +7,31 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import ReactMarkdown from 'react-markdown';
 import { htmlToText } from 'html-to-text';
+import { Menu } from 'lucide-react';
+import {  PlusIcon } from 'lucide-react';
+
+
+
+
 
 // Voice API Setup (Web Speech API)
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 const recognition = SpeechRecognition ? new SpeechRecognition() : null;
 const synth = window.speechSynthesis;
 
-// New SourceSidebar Component
-const SourceSidebar = ({ messages, isOpen, onClose }: { messages: any[]; isOpen: boolean; onClose: () => void }) => {
-  const sourcesExist = messages.some((m) => m.sources?.length > 0);
+
+
+
+const SourceSidebar = ({
+  messages,
+  isOpen,
+  onClose,
+}: {
+  messages: any[];
+  isOpen: boolean;
+  onClose: () => void;
+}) => {
+  const sourcesExist = [...messages].reverse().some((m) => m.type === 'bot' && m.sources?.length > 0);
 
   return (
     <AnimatePresence>
@@ -25,7 +41,7 @@ const SourceSidebar = ({ messages, isOpen, onClose }: { messages: any[]; isOpen:
           animate={{ width: 300, opacity: 1 }}
           exit={{ width: 0, opacity: 0 }}
           transition={{ duration: 0.3 }}
-          className="bg-gray-50 border-l flex-shrink-0 h-full p-4"
+          className="bg-gray-50 fixed right-0 top-0 border-l flex-shrink-0 h-full p-4 z-20"
         >
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-medium text-gray-800">Sources</h2>
@@ -34,12 +50,19 @@ const SourceSidebar = ({ messages, isOpen, onClose }: { messages: any[]; isOpen:
             </Button>
           </div>
           <ScrollArea className="h-[calc(100%-4rem)]">
-            {messages
-              .filter((m) => m.sources?.length > 0)
-              .map((m, i) => (
-                <div key={i} className="mb-4">
-                  <p className="text-xs text-gray-500 mb-2">{m.content.substring(0, 50)}...</p>
-                  {m.sources.map((source: any, index: number) => (
+            {(() => {
+              const latestMessageWithSources = [...messages]
+                .reverse()
+                .find((m) => m.type === 'bot' && m.sources?.length > 0);
+
+              if (!latestMessageWithSources) return null;
+
+              return (
+                <div className="mb-4">
+                  <p className="text-xs text-gray-500 mb-2">
+                    {latestMessageWithSources.content.substring(0, 50)}...
+                  </p>
+                  {latestMessageWithSources.sources.map((source: any, index: number) => (
                     <div
                       key={index}
                       className="bg-white rounded-md p-2 mb-2 shadow-sm hover:bg-gray-100 transition-colors"
@@ -65,13 +88,101 @@ const SourceSidebar = ({ messages, isOpen, onClose }: { messages: any[]; isOpen:
                     </div>
                   ))}
                 </div>
-              ))}
+              );
+            })()}
           </ScrollArea>
         </motion.div>
       )}
     </AnimatePresence>
   );
 };
+
+
+
+
+
+
+const LeftSidebar = ({
+  chatHistory,
+  isOpen,
+  onClose,
+  onSelectChat, // ✅ rename for clarity
+  onNewChat,
+}: {
+  chatHistory: Array<{ id: string; title: string; messages: any[] }>;
+  isOpen: boolean;
+  onClose: () => void;
+  onSelectChat: (chat: { id: string; title: string; messages: any[] }) => void; // ✅ pass the whole chat
+  onNewChat: () => void;
+}) => {
+  if (!chatHistory.length) return null;
+
+  const handleNewChat = () => {
+    onNewChat();
+    onClose();
+  };
+
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div
+          initial={{ width: 0, opacity: 0 }}
+          animate={{ width: 300, opacity: 1 }}
+          exit={{ width: 0, opacity: 0 }}
+          transition={{ duration: 0.3 }}
+          className="bg-gray-50 fixed left-0 top-0 border-r flex-shrink-0 h-full p-4 z-20"
+        >
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-lg font-medium text-gray-800">History</h2>
+            <div className="flex space-x-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleNewChat}
+              >
+                <PlusIcon className="h-4 w-4 text-gray-600" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={onClose}
+              >
+                <ArrowLeft className="h-4 w-4 text-gray-600" />
+              </Button>
+            </div>
+          </div>
+
+          <ScrollArea className="h-[calc(100%-4rem)]">
+            {chatHistory.map((chat) => (
+              <div
+                key={chat.id}
+                onClick={() => {
+                  onSelectChat(chat); // ✅ load the entire chat
+                  onClose();           // Optional: close sidebar
+                }}
+                className="cursor-pointer bg-white rounded-md p-2 mb-2 shadow-sm hover:bg-gray-100 transition-colors"
+              >
+                <p className="text-sm font-medium text-gray-800 truncate">
+                  {chat.title}
+                </p>
+                <p className="text-xs text-gray-500">
+                  {chat.messages.length} messages
+                </p>
+              </div>
+            ))}
+          </ScrollArea>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+};
+
+
+
+
+
+
+
 
 export function Search() {
   const [location, setLocation] = useLocation();
@@ -100,8 +211,46 @@ export function Search() {
   const [searchQuery, setSearchQuery] = useState(getQueryFromUrl());
   const [refetchCounter, setRefetchCounter] = useState(0);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isLeftSidebarOpen, setIsLeftSidebarOpen] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const [chatHistory, setChatHistory] = useState<Array<{ id: string; title: string; messages: any[] }>>(() => {
+    const savedHistory = localStorage.getItem('chatHistory');
+    return savedHistory ? JSON.parse(savedHistory) : [];
+  });
+  
+
+  const handleNewChat = () => {
+
+    if (messages.length > 0) {
+      const chatTitle = `Chat ${chatHistory.length + 1}`;
+  
+      const newChat = {
+        // id: Date.now().toString(), // or use a UUID
+        id: sessionId,
+        title: chatTitle,
+        messages: messages,
+      };
+  
+      const updatedHistory = [...chatHistory, newChat];
+      setChatHistory(updatedHistory);
+      localStorage.setItem('chatHistory', JSON.stringify(updatedHistory));
+    }
+    
+
+    const newSessionId = Date.now().toString();
+
+    setMessages([]);                // Clear chat messages
+    // setSessionId(newSessionId);             // Reset the session
+    setSessionId(null);
+    setOriginalQuery(null);         // Reset original query
+    setSearchQuery('');             // Reset search query
+    setInputValue('');              // Clear input box
+    setIsSidebarOpen(false);        // Close right sidebar (optional)
+    setIsLeftSidebarOpen(false);    // Close left sidebar (optional)
+    window.history.pushState({}, '', `/search`); // Reset URL if you want
+  };
 
   // Save messages to localStorage whenever they change
   useEffect(() => {
@@ -112,6 +261,45 @@ export function Search() {
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
+
+
+  const loadChat = (chat: { id: string; title: string; messages: any[] }) => {
+    // Save current chat if there are unsaved messages
+    if (messages.length > 0) {
+      const existingChatIndex = chatHistory.findIndex((c) => c.id === sessionId);
+  
+      let updatedHistory;
+      if (existingChatIndex !== -1) {
+        // Update existing chat with latest messages
+        updatedHistory = [...chatHistory];
+        updatedHistory[existingChatIndex] = {
+          ...updatedHistory[existingChatIndex],
+          messages: messages,
+        };
+      } else {
+        const newChat = {
+          id: sessionId || Date.now().toString(),
+          title: `Chat ${chatHistory.length + 1}`,
+          messages: messages,
+        };
+        updatedHistory = [...chatHistory, newChat];
+      }
+  
+      setChatHistory(updatedHistory);
+      localStorage.setItem('chatHistory', JSON.stringify(updatedHistory));
+    }
+  
+    // Load the selected chat
+    setMessages(chat.messages);
+    setSessionId(chat.id);
+    setOriginalQuery(null);
+    setSearchQuery('');
+    window.history.pushState({}, '', `/search`);
+  };
+  
+  
+
+ 
 
   const processSearchResults = (result: any, isFollowUp: boolean = false, followUpQuery: string = '') => {
     let content = '';
@@ -179,20 +367,32 @@ export function Search() {
         return result;
       }
 
+      console.log('Sending follow-up', { sessionId, followUpQuery });
+
       const response = await fetch('/api/follow-up', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId, query: followUpQuery }),
       });
-
-      if (!response.ok) throw new Error('Follow-up failed');
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`Follow-up failed. Status: ${response.status}, Error: ${errorText}`);
+        throw new Error(`Follow-up failed: ${errorText}`);
+      }
+      
       const result = await response.json();
+      console.log('Follow-up result:', result);
+      
       const { content, sources } = processSearchResults(result, true, followUpQuery);
+      
       setMessages((prev) => [
         ...prev,
         { type: 'bot', content, sources, isFollowUp: true, originalQuery },
       ]);
+      
       return result;
+      
     },
   });
 
@@ -261,40 +461,57 @@ export function Search() {
   }, [error, followUpMutation.error]);
 
   return (
+    <>
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.3 }}
-      className="min-h-screen flex flex-col bg-gradient-to-b from-blue-50 to-white text-gray-800"
+      className=" relative min-h-screen flex flex-col bg-gradient-to-b from-blue-50 to-white text-gray-800"
     >
       {/* Header */}
       <motion.div
-        initial={{ y: -20, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ duration: 0.4 }}
-        className="border-b p-4 sticky top-0 bg-white shadow-sm z-10"
+  initial={{ y: -20, opacity: 0 }}
+  animate={{ y: 0, opacity: 1 }}
+  transition={{ duration: 0.4 }}
+  className="border-b p-4 sticky top-0 bg-white shadow-sm z-10 transition-all duration-300"
+  style={{
+    marginLeft: isLeftSidebarOpen ? '250px' : '0px', // Change this width to match your sidebar
+  }}
+>
+  <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+    <div className="flex items-center gap-4">
+      {/* NEW Menu Button for Left Sidebar */}
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={() => setIsLeftSidebarOpen((prev) => !prev)}
+        className="text-gray-600 hover:text-blue-600"
       >
-        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={() => setLocation('/')}>
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-            <h1 className="text-xl font-semibold">imiGPT</h1>
-          </div>
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => setIsSidebarOpen((prev) => !prev)}
-            className="text-gray-600 hover:text-blue-600"
-          >
-            <Link className="h-4 w-4" />
-          </Button>
-        </div>
-      </motion.div>
+        <Menu className="h-5 w-5" />
+      </Button>
+
+      <Button variant="ghost" size="icon" onClick={() => setLocation('/')}>
+        <ArrowLeft className="h-4 w-4" />
+      </Button>
+      <h1 className="text-xl font-semibold">imiGPT</h1>
+    </div>
+
+    {/* Existing button for Right Sidebar */}
+    <Button
+      variant="outline"
+      size="icon"
+      onClick={() => setIsSidebarOpen((prev) => !prev)}
+      className="text-gray-600 hover:text-blue-600"
+    >
+      <Link className="h-4 w-4" />
+    </Button>
+  </div>
+</motion.div>
+
 
       {/* Main Layout */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden transition-all duration-300 ${isLeftSidebarOpen ? 'pl-[300px]' : ''}`">
         {/* Chat Area */}
         <ScrollArea className="flex-1 p-4">
           <div className="max-w-4xl mx-auto space-y-6">
@@ -319,11 +536,12 @@ export function Search() {
                       {message.type === 'user' ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
                     </div>
                     <div>
-                      {message.isFollowUp && message.originalQuery && (
+                      {/* {message.isFollowUp && message.originalQuery && (
                         <div className="text-xs text-gray-500 mb-1">
                           Follow-up to: "{message.originalQuery}"
                         </div>
-                      )}
+                      )} */}
+                      {/* {message.isFollowUp && message.originalQuery } */}
                       <div
                         className={`rounded-lg px-4 py-3 text-sm shadow-md ${
                           message.type === 'user' ? 'bg-blue-500 text-white' : 'bg-white text-gray-800'
@@ -350,9 +568,10 @@ export function Search() {
           </div>
         </ScrollArea>
 
-        {/* Source Sidebar */}
-        <SourceSidebar messages={messages} isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+        
       </div>
+      {/* Source Sidebar */}
+      <SourceSidebar messages={messages} isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
 
       {/* Input Area */}
       <motion.div
@@ -406,5 +625,14 @@ export function Search() {
         </div>
       </motion.div>
     </motion.div>
+    <LeftSidebar
+  chatHistory={chatHistory}
+  isOpen={isLeftSidebarOpen}
+  onClose={() => setIsLeftSidebarOpen(false)}
+  onSelectChat={loadChat}       // ✅ loadChat will load full chat history
+  onNewChat={handleNewChat}
+/>
+
+   </>
   );
 }
