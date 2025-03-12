@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useLocation } from 'wouter';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Send, User, Bot, ExternalLink, Mic, Volume2, Link } from 'lucide-react';
+import { Pencil, Trash2, ArrowLeft, Send, User, Bot, ExternalLink, Mic, Volume2, Link } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import ReactMarkdown from 'react-markdown';
@@ -102,18 +102,105 @@ const SourceSidebar = ({
 
 
 
+// const LeftSidebar = ({
+//   chatHistory,
+//   isOpen,
+//   onClose,
+//   onSelectChat, // ✅ rename for clarity
+//   onNewChat,
+// }: {
+//   chatHistory: Array<{ id: string; title: string; messages: any[] }>;
+//   isOpen: boolean;
+//   onClose: () => void;
+//   onSelectChat: (chat: { id: string; title: string; messages: any[] }) => void; // ✅ pass the whole chat
+//   onNewChat: () => void;
+// }) => {
+//   if (!chatHistory.length) return null;
+
+//   const handleNewChat = () => {
+//     onNewChat();
+//     onClose();
+//   };
+
+//   return (
+//     <AnimatePresence>
+//       {isOpen && (
+//         <motion.div
+//           initial={{ width: 0, opacity: 0 }}
+//           animate={{ width: 300, opacity: 1 }}
+//           exit={{ width: 0, opacity: 0 }}
+//           transition={{ duration: 0.3 }}
+//           className="bg-gray-50 fixed left-0 top-0 border-r flex-shrink-0 h-full p-4 z-20"
+//         >
+//           <div className="flex justify-between items-center mb-4">
+//             <h2 className="text-lg font-medium text-gray-800">History</h2>
+//             <div className="flex space-x-2">
+//               <Button
+//                 variant="ghost"
+//                 size="icon"
+//                 onClick={handleNewChat}
+//               >
+//                 <PlusIcon className="h-4 w-4 text-gray-600" />
+//               </Button>
+//               <Button
+//                 variant="ghost"
+//                 size="icon"
+//                 onClick={onClose}
+//               >
+//                 <ArrowLeft className="h-4 w-4 text-gray-600" />
+//               </Button>
+//             </div>
+//           </div>
+
+//           <ScrollArea className="h-[calc(100%-4rem)]">
+//             {chatHistory.map((chat) => (
+//               <div
+//                 key={chat.id}
+//                 onClick={() => {
+//                   onSelectChat(chat); // ✅ load the entire chat
+//                   onClose();           // Optional: close sidebar
+//                 }}
+//                 className="cursor-pointer bg-white rounded-md p-2 mb-2 shadow-sm hover:bg-gray-100 transition-colors"
+//               >
+//                 <p className="text-sm font-medium text-gray-800 truncate">
+//                   {chat.title}
+//                 </p>
+//                 <p className="text-xs text-gray-500">
+//                   {chat.messages.length} messages
+//                 </p>
+//               </div>
+//             ))}
+//           </ScrollArea>
+//         </motion.div>
+//       )}
+//     </AnimatePresence>
+//   );
+// };
+
+
+
+
+
+
+
+
+
 const LeftSidebar = ({
   chatHistory,
   isOpen,
   onClose,
-  onSelectChat, // ✅ rename for clarity
+  onSelectChat,
   onNewChat,
+  onRenameChat,  // ✅ Pass rename handler
+  onDeleteChat,  // ✅ Pass delete handler
 }: {
   chatHistory: Array<{ id: string; title: string; messages: any[] }>;
   isOpen: boolean;
   onClose: () => void;
-  onSelectChat: (chat: { id: string; title: string; messages: any[] }) => void; // ✅ pass the whole chat
+  onSelectChat: (chat: { id: string; title: string; messages: any[] }) => void;
   onNewChat: () => void;
+  onRenameChat: (chatId: string) => void;  // ✅ Handler type
+  onDeleteChat: (chatId: string) => void;  // ✅ Handler type
 }) => {
   if (!chatHistory.length) return null;
 
@@ -135,18 +222,10 @@ const LeftSidebar = ({
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-medium text-gray-800">History</h2>
             <div className="flex space-x-2">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={handleNewChat}
-              >
+              <Button variant="ghost" size="icon" onClick={handleNewChat}>
                 <PlusIcon className="h-4 w-4 text-gray-600" />
               </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={onClose}
-              >
+              <Button variant="ghost" size="icon" onClick={onClose}>
                 <ArrowLeft className="h-4 w-4 text-gray-600" />
               </Button>
             </div>
@@ -156,18 +235,48 @@ const LeftSidebar = ({
             {chatHistory.map((chat) => (
               <div
                 key={chat.id}
-                onClick={() => {
-                  onSelectChat(chat); // ✅ load the entire chat
-                  onClose();           // Optional: close sidebar
-                }}
-                className="cursor-pointer bg-white rounded-md p-2 mb-2 shadow-sm hover:bg-gray-100 transition-colors"
+                className="flex items-center justify-between bg-white rounded-md p-2 mb-2 shadow-sm hover:bg-gray-100 transition-colors"
               >
-                <p className="text-sm font-medium text-gray-800 truncate">
-                  {chat.title}
-                </p>
-                <p className="text-xs text-gray-500">
-                  {chat.messages.length} messages
-                </p>
+                {/* Chat Info Clickable */}
+                <div
+                  onClick={() => {
+                    onSelectChat(chat);
+                    onClose();
+                  }}
+                  className="flex-1 cursor-pointer overflow-hidden"
+                >
+                  <p className="text-sm font-medium text-gray-800 truncate">
+                    {chat.title}
+                  </p>
+                  <p className="text-xs text-gray-500">{chat.messages.length} messages</p>
+                </div>
+
+                {/* Actions */}
+                <div className="flex space-x-1 ml-2">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6"
+                    onClick={(e) => {
+                      e.stopPropagation(); // ✅ Prevent triggering onSelectChat
+                      onRenameChat(chat.id);
+                    }}
+                  >
+                    <Pencil className="h-4 w-4 text-gray-600" />
+                  </Button>
+
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6"
+                    onClick={(e) => {
+                      e.stopPropagation(); // ✅ Prevent triggering onSelectChat
+                      onDeleteChat(chat.id);
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4 text-red-500" />
+                  </Button>
+                </div>
               </div>
             ))}
           </ScrollArea>
@@ -176,6 +285,8 @@ const LeftSidebar = ({
     </AnimatePresence>
   );
 };
+
+export default LeftSidebar;
 
 
 
@@ -460,6 +571,39 @@ export function Search() {
     }
   }, [error, followUpMutation.error]);
 
+
+
+  
+  const handleRenameChat = (chatId: string) => {
+    const newTitle = window.prompt("Enter a new title for the chat:");
+  
+    if (newTitle && newTitle.trim() !== "") {
+      const updatedChatHistory = chatHistory.map((chat) => {
+        if (chat.id === chatId) {
+          return { ...chat, title: newTitle };
+        }
+        return chat;
+      });
+  
+      setChatHistory(updatedChatHistory);
+    }
+  };
+  
+  
+  const handleDeleteChat = (chatId: string) => {
+    // Optional: confirm before deleting
+    if (window.confirm("Are you sure you want to delete this chat?")) {
+      const updatedChatHistory = chatHistory.filter((chat) => chat.id !== chatId);
+      setChatHistory(updatedChatHistory);
+    }
+  };
+  
+
+
+
+
+
+
   return (
     <>
     <motion.div
@@ -631,6 +775,8 @@ export function Search() {
   onClose={() => setIsLeftSidebarOpen(false)}
   onSelectChat={loadChat}       // ✅ loadChat will load full chat history
   onNewChat={handleNewChat}
+  onRenameChat={handleRenameChat}   // ✅ Add this
+  onDeleteChat={handleDeleteChat} 
 />
 
    </>
