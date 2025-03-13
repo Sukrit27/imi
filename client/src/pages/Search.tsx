@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useLocation } from 'wouter';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
-import { Pencil, Trash2, ArrowLeft, Send, User, Bot, ExternalLink, Mic, Volume2, Link } from 'lucide-react';
+import { Pencil, Trash2, ArrowLeft, Send, User, Bot, ExternalLink, Mic, MicOff, Volume2, Link } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import ReactMarkdown from 'react-markdown';
@@ -14,12 +14,21 @@ import {  PlusIcon } from 'lucide-react';
 
 
 
-// Voice API Setup (Web Speech API)
-const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-const recognition = SpeechRecognition ? new SpeechRecognition() : null;
-const synth = window.speechSynthesis;
+// // Voice API Setup (Web Speech API)
+// const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+// const recognition = SpeechRecognition ? new SpeechRecognition() : null;
+// const synth = window.speechSynthesis;
 
 
+
+declare global {
+  interface Window {
+    SpeechRecognition: any;
+    webkitSpeechRecognition: any;
+  }
+}
+
+const synth = typeof window !== 'undefined' ? window.speechSynthesis : null;
 
 
 const SourceSidebar = ({
@@ -291,12 +300,40 @@ export default LeftSidebar;
 
 
 
+// Add this at the top of your component/file
+// declare global {
+//   interface Window {
+//     SpeechRecognition: any;
+//     webkitSpeechRecognition: any;
+//   }
+// }
+
+// const SpeechRecognition =
+//   typeof window !== 'undefined'
+//     ? window.SpeechRecognition || window.webkitSpeechRecognition
+//     : null;
+
+
+
+
 
 
 
 
 export function Search() {
   const [location, setLocation] = useLocation();
+  const [isVoiceChatActive, setIsVoiceChatActive] = useState(false);
+  const recognitionRef = useRef<any>(null);
+  const wsRef = useRef<WebSocket | null>(null);
+
+
+
+  const SpeechRecognition =
+    typeof window !== 'undefined'
+      ? window.SpeechRecognition || window.webkitSpeechRecognition
+      : null;
+
+  const recognition = SpeechRecognition ? new SpeechRecognition() : null;
 
   const getQueryFromUrl = () => {
     const searchParams = new URLSearchParams(window.location.search);
@@ -330,6 +367,272 @@ export function Search() {
     const savedHistory = localStorage.getItem('chatHistory');
     return savedHistory ? JSON.parse(savedHistory) : [];
   });
+
+
+  // const handleVoiceChatToggle = () => {
+  //   if (!isVoiceChatActive) {
+  //     setIsVoiceChatActive(true);
+  //     startVoiceConversation();
+  //   } else {
+  //     setIsVoiceChatActive(false);
+  //     recognitionRef.current?.stop();
+  //     synth?.cancel();
+  //   }
+  // };
+
+  // const startVoiceConversation = () => {
+  //   if (!SpeechRecognition) {
+  //     console.error("SpeechRecognition not supported");
+  //     return;
+  //   }
+
+  //   const recognition = new SpeechRecognition();
+  //   recognition.lang = 'en-US';
+  //   recognition.interimResults = false;
+
+  //   recognition.onresult = async (event: any) => {
+  //     const transcript = event.results[0][0].transcript;
+  //     console.log("User said:", transcript);
+
+  //     // Send the transcript to AI
+  //     const aiResponse = await handleSendToAI(transcript);
+
+  //     // Speak the response
+  //     speak(aiResponse, () => {
+  //       if (isVoiceChatActive) {
+  //         startVoiceConversation(); // Keep listening
+  //       }
+  //     });
+  //   };
+
+  //   recognition.onerror = (event: any) => {
+  //     console.error("Recognition error:", event.error);
+  //     if (isVoiceChatActive) {
+  //       startVoiceConversation(); // Restart after error
+  //     }
+  //   };
+
+  //   recognition.onend = () => {
+  //     if (isVoiceChatActive) {
+  //       startVoiceConversation(); // Restart if active
+  //     }
+  //   };
+
+  //   recognitionRef.current = recognition;
+  //   recognition.start();
+  // };
+
+  // const handleSendToAI = async (userQuery: string): Promise<string> => {
+  //   try {
+  //     let response;
+
+  //     if (!sessionId) {
+  //       const res = await fetch(`/api/search?q=${encodeURIComponent(userQuery)}`);
+  //       const data = await res.json();
+  //       setSessionId(data.sessionId);
+  //       response = data.summary;
+  //     } else {
+  //       const res = await fetch(`/api/follow-up`, {
+  //         method: 'POST',
+  //         headers: {
+  //           'Content-Type': 'application/json'
+  //         },
+  //         body: JSON.stringify({ sessionId, query: userQuery }),
+  //       });
+  //       const data = await res.json();
+  //       response = data.summary;
+  //     }
+
+  //     console.log("AI response:", response);
+  //     return response;
+  //   } catch (err) {
+  //     console.error("Error communicating with AI:", err);
+  //     return "Sorry, something went wrong.";
+  //   }
+  // };
+
+  // const speak = (text: string, onEnd: () => void) => {
+  //   if (!synth) {
+  //     console.error("Speech synthesis not supported");
+  //     return;
+  //   }
+
+  //   const utterance = new SpeechSynthesisUtterance(stripMarkdown(text));
+  //   utterance.lang = 'en-US';
+
+  //   utterance.onend = onEnd;
+  //   synth.speak(utterance);
+  // };
+
+ // No changes here! This works fine.
+ const handleSendToAI = async (userQuery: string): Promise<string> => {
+  try {
+    let response;
+
+    if (!sessionId) {
+      const res = await fetch(`/api/search?q=${encodeURIComponent(userQuery)}`);
+      const data = await res.json();
+      setSessionId(data.sessionId);
+      response = data.summary;
+    } else {
+      const res = await fetch(`/api/follow-up`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ sessionId, query: userQuery }),
+      });
+      const data = await res.json();
+      response = data.summary;
+    }
+
+    console.log("AI response:", response);
+    return response;
+  } catch (err) {
+    console.error("Error communicating with AI:", err);
+    return "Sorry, something went wrong.";
+  }
+};
+
+const handleVoiceChatToggle = () => {
+  if (!isVoiceChatActive) {
+    setIsVoiceChatActive(true);
+
+    // Start WebSocket connection
+    wsRef.current = new WebSocket("ws://localhost:8000");
+
+    wsRef.current.onopen = () => {
+      console.log("✅ WebSocket connection established");
+      startVoiceConversation(); // start listening after connection
+    };
+
+    wsRef.current.onmessage = (event) => {
+      const aiResponse = event.data;
+      console.log("🤖 AI WebSocket response:", aiResponse);
+
+      // Speak the AI response
+      speak(aiResponse, () => {
+        if (isVoiceChatActive) {
+          console.log("🎤 Restarting recognition after speaking...");
+          setTimeout(() => {
+            recognitionRef.current?.start();
+          }, 500);
+        }
+      });
+    };
+
+    wsRef.current.onerror = (err) => {
+      console.error("❌ WebSocket error:", err);
+    };
+
+    wsRef.current.onclose = () => {
+      console.log("🔌 WebSocket closed");
+    };
+  } else {
+    setIsVoiceChatActive(false);
+    recognitionRef.current?.stop();
+    synth?.cancel();
+
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+  }
+};
+
+
+const startVoiceConversation = () => {
+  if (!SpeechRecognition) {
+    console.error("SpeechRecognition not supported");
+    return;
+  }
+
+  if (!recognitionRef.current) {
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'en-US';
+    recognition.interimResults = false;
+    recognition.continuous = true;
+
+    recognition.onresult = async (event: any) => {
+      const transcript = event.results[event.results.length - 1][0].transcript;
+      console.log("🗣️ User said:", transcript);
+
+      // Stop recognition while AI is answering
+      recognition.stop();
+
+      // ✅ Send user message to WebSocket server
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        wsRef.current.send(transcript);
+      } else {
+        console.warn("WebSocket is not open");
+      }
+
+      // No need to wait for response here, handled in ws.onmessage
+    };
+
+    recognition.onerror = (event: any) => {
+      console.error("❌ Recognition error:", event.error);
+      if (isVoiceChatActive) {
+        setTimeout(() => recognition.start(), 1000);
+      }
+    };
+
+    recognition.onend = () => {
+      console.log("⚠️ Recognition ended");
+      if (isVoiceChatActive) {
+        setTimeout(() => recognition.start(), 1000);
+      }
+    };
+
+    recognitionRef.current = recognition;
+  }
+
+  console.log("🎤 Starting recognition...");
+  recognitionRef.current.start();
+};
+
+
+  // const stopVoiceConversation = () => {
+  //   console.log("Stopping voice conversation...");
+  //   recognitionRef.current?.stop();
+  //   synth?.cancel();
+  // };
+  
+ 
+  
+  // No changes here either!
+  const speak = (text: string, onEnd: () => void) => {
+    if (!synth) {
+      console.error("Speech synthesis not supported");
+      return;
+    }
+  
+    const utterance = new SpeechSynthesisUtterance(stripMarkdown(text));
+    utterance.lang = 'en-US';
+  
+    utterance.onend = () => {
+      console.log("Speech ended");
+      onEnd(); // Call the callback when finished speaking
+    };
+    synth.speak(utterance);
+  };
+  
+
+
+
+
+
+
+
+
+  const stripMarkdown = (text: string): string => {
+    return text.replace(/[#_*`>-]/g, "").replace(/\[(.*?)\]\(.*?\)/g, "$1");
+  };
+
+
+
+
+
   
 
   const handleNewChat = () => {
@@ -365,6 +668,13 @@ export function Search() {
 
   // Save messages to localStorage whenever they change
   useEffect(() => {
+
+
+
+
+
+
+
     localStorage.setItem('chatMessages', JSON.stringify(messages));
     scrollToBottom();
   }, [messages]);
@@ -539,11 +849,11 @@ export function Search() {
     recognition.start();
   };
 
-  const speak = (text: string) => {
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = 'en-IN';
-    synth.speak(utterance);
-  };
+  // const speak = (text: string) => {
+  //   const utterance = new SpeechSynthesisUtterance(text);
+  //   utterance.lang = 'en-IN';
+  //   synth.speak(utterance);
+  // };
 
   useEffect(() => {
     const query = getQueryFromUrl();
@@ -573,7 +883,7 @@ export function Search() {
 
 
 
-  
+
   const handleRenameChat = (chatId: string) => {
     const newTitle = window.prompt("Enter a new title for the chat:");
   
@@ -734,7 +1044,25 @@ export function Search() {
           >
             <Mic className="h-4 w-4" />
           </Button>
-          <div className="relative flex-1">
+
+          <Button
+  variant="outline"
+  size="icon"
+  onClick={handleVoiceChatToggle}
+  disabled={isLoading || followUpMutation.isPending}
+  className={isVoiceChatActive ? 'bg-green-100' : ''}
+  title={isVoiceChatActive ? 'Stop Voice Chat' : 'Start Voice Chat'}
+>
+  {isVoiceChatActive ? (
+    <MicOff className="h-4 w-4 text-red-500" />
+  ) : (
+    <Mic className="h-4 w-4" />
+  )}
+</Button>
+
+
+
+          <div className="relative flex-1"> 
             <textarea
               className="w-full rounded-md border bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none min-h-[40px] max-h-[120px] overflow-y-auto"
               placeholder="Ask a question..."
